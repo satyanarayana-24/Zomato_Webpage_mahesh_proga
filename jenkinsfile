@@ -15,7 +15,7 @@ pipeline {
         }
         stage ("Git Checkout") {
             steps {
-                git 'https://github.com/KastroVKiran/Zomato-Project-Kastro.git'
+                git 'https://github.com/Mahesh1-code141/Zomato_Webpage.git'
             }
         }
         stage("Sonarqube Analysis"){
@@ -29,7 +29,7 @@ pipeline {
         stage("Code Quality Gate"){
            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sq' 
                 }
             } 
         }
@@ -57,9 +57,9 @@ pipeline {
         stage ("Tag & Push to DockerHub") {
             steps {
                 script {
-                    withDockerRegistry(credentialsId: 'docker') {
-                        sh "docker tag zomato kastrov/zomato:latest "
-                        sh "docker push kastrov/zomato:latest "
+                    withDockerRegistry(credentialsId: 'dockerhub-cred') {
+                        sh "docker tag zomato mahesh2452/zomato:latest "
+                        sh "docker push mahesh2452/zomato:latest "
                     }
                 }
             }
@@ -67,17 +67,17 @@ pipeline {
         stage('Docker Scout Image') {
             steps {
                 script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                       sh 'docker-scout quickview kastrov/zomato:latest'
-                       sh 'docker-scout cves kastrov/zomato:latest'
-                       sh 'docker-scout recommendations kastrov/zomato:latest'
+                   withDockerRegistry(credentialsId: 'dockerhub-cred', toolName: 'docker'){
+                       sh 'docker-scout quickview mahesh2452/zomato:latest'
+                       sh 'docker-scout cves mahesh2452/zomato:latest'
+                       sh 'docker-scout recommendations  mahesh2452/zomato:latest'
                    }
                 }
             }
         }
         stage ("Deploy to Container") {
             steps {
-                sh 'docker run -d --name zomato -p 3000:3000 kastrov/zomato:latest'
+                sh 'docker run -d --name zomatocont -p 3000:3000 mahesh2452/zomato:latest'
             }
         }
     }
@@ -100,7 +100,7 @@ pipeline {
                 </body>
                 </html>
             """,
-            to: 'kastrokiran@gmail.com',
+            to: 'maheshbabuya@gmail.com',
             mimeType: 'text/html',
             attachmentsPattern: 'trivy.txt'
         }
