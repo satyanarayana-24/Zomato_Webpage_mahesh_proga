@@ -12,7 +12,6 @@ pipeline {
         DOCKER_IMAGE   = 'mahesh2452/zomato-project'
         DOCKER_CRED_ID = 'dockerhub-cred'
         SONAR_CRED_ID  = 'sq'
-        AWS_CRED_ID    = 'aws-creds'
         NEXUS_CRED_ID  = 'nexus-cred'
         NEXUS_URL      = 'http://<NEXUS_IP>:8081'
         NEXUS_REPO     = 'zomato-docker'
@@ -49,7 +48,7 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 2, unit: 'MINUTES') {
+                timeout(time: 3, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true,
                                        credentialsId: "${SONAR_CRED_ID}"
                 }
