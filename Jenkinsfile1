@@ -13,7 +13,7 @@ pipeline {
         SONAR_CRED_ID  = 'sq'
         AWS_CRED_ID    = 'aws-creds'
         NEXUS_CRED_ID  = 'nexus-cred'
-        NEXUS_URL      = 'http://<NEXUS_IP>:8081'
+        NEXUS_URL      = 'http://13.235.9.61:8081'
         NEXUS_REPO     = 'zomato-docker'
         EKS_CLUSTER    = 'mycluster'
         AWS_REGION     = 'ap-south-1'
