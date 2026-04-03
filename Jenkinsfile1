@@ -13,7 +13,7 @@ pipeline {
         DOCKER_CRED_ID = 'dockerhub-cred'
         SONAR_CRED_ID  = 'sq'
         NEXUS_CRED_ID  = 'nexus-cred'
-        NEXUS_URL      = 'http://<NEXUS_IP>:8081'
+        NEXUS_URL      = 'http://13.235.9.61:8081'
         NEXUS_REPO     = 'zomato-docker'
         EKS_CLUSTER    = 'mycluster'
         AWS_REGION     = 'ap-south-1'
@@ -48,7 +48,7 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 3, unit: 'MINUTES') {
+                timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true,
                                        credentialsId: "${SONAR_CRED_ID}"
                 }
@@ -115,6 +115,23 @@ pipeline {
                     docker compose -f monitoring/docker-compose-monitoring.yml down --remove-orphans || true
                     docker compose -f monitoring/docker-compose-monitoring.yml up -d
                 '''
+            }
+        }
+
+        stage('Ansible Deployment') {
+            steps {
+                withCredentials([sshUserPrivateKey(
+                    credentialsId: 'ansible-ssh-key',
+                    keyFileVariable: 'SSH_KEY',
+                    usernameVariable: 'ANSIBLE_USER'
+                )]) {
+                    sh '''
+                        ansible-playbook -i ansible/inventory.ini ansible/playbook.yml \
+                            --private-key=$SSH_KEY \
+                            -u $ANSIBLE_USER \
+                            --extra-vars "docker_image=mahesh2452/zomato-project:latest"
+                    '''
+                }
             }
         }
 
