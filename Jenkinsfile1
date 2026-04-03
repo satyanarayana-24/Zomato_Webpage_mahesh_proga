@@ -7,17 +7,16 @@ pipeline {
     }
 
     environment {
-        SCANNER_HOME   = tool 'sonar-scanner'
         SONARQUBE_ENV  = 'sonar-server'
         DOCKER_IMAGE   = 'mahesh2452/zomato-project'
         DOCKER_CRED_ID = 'dockerhub-cred'
         SONAR_CRED_ID  = 'sq'
+        AWS_CRED_ID    = 'aws-creds'
         NEXUS_CRED_ID  = 'nexus-cred'
-        NEXUS_URL      = 'http://13.235.9.61:8081'
+        NEXUS_URL      = 'http://<NEXUS_IP>:8081'
         NEXUS_REPO     = 'zomato-docker'
         EKS_CLUSTER    = 'mycluster'
         AWS_REGION     = 'ap-south-1'
-        RECIPIENTS     = 'maheshbabuya@gmail.com'
     }
 
     stages {
@@ -37,11 +36,14 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv("${SONARQUBE_ENV}") {
-                    sh '''
-                        $SCANNER_HOME/bin/sonar-scanner \
-                            -Dsonar.projectName=zomato \
-                            -Dsonar.projectKey=zomato
-                    '''
+                    script {
+                        def scannerHome = tool name: 'sonar-scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectName=zomato \
+                                -Dsonar.projectKey=zomato
+                        """
+                    }
                 }
             }
         }
@@ -158,7 +160,7 @@ pipeline {
             emailext(
                 attachLog: true,
                 mimeType: 'text/html',
-                to: "${RECIPIENTS}",
+                to: 'maheshbabuya@gmail.com',
                 subject: "'${currentBuild.result}' — ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: """
                     <html>
