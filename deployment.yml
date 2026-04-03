@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: zomato-container
-        image: mahesh2452/flight-project:latest
+        image: mahesh2452/zomato-project
         ports:
         - containerPort: 8080
 ---
