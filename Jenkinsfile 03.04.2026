@@ -1,0 +1,168 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'jdk21'
+        nodejs 'node23'
+    }
+
+    environment {
+        SCANNER_HOME   = tool 'sonar-scanner'
+        SONARQUBE_ENV  = 'sonar-server'
+        DOCKER_IMAGE   = 'mahesh2452/zomato-project'
+        DOCKER_CRED_ID = 'dockerhub-cred'
+        SONAR_CRED_ID  = 'sq'
+        AWS_CRED_ID    = 'aws-creds'
+        NEXUS_CRED_ID  = 'nexus-cred'
+        NEXUS_URL      = 'http://<NEXUS_IP>:8081'
+        NEXUS_REPO     = 'zomato-docker'
+        EKS_CLUSTER    = 'mycluster'
+        AWS_REGION     = 'ap-south-1'
+        RECIPIENTS     = 'maheshbabuya@gmail.com'
+    }
+
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/Mahesh1-code141/Zomato_Webpage.git'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                    sh '''
+                        $SCANNER_HOME/bin/sonar-scanner \
+                            -Dsonar.projectName=zomato \
+                            -Dsonar.projectKey=zomato
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 2, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true,
+                                       credentialsId: "${SONAR_CRED_ID}"
+                }
+            }
+        }
+
+        stage('Install NPM Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh "docker build -t ${DOCKER_IMAGE}:latest ."
+            }
+        }
+
+        stage('Push to Nexus') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: "${NEXUS_CRED_ID}",
+                    usernameVariable: 'NEXUS_USER',
+                    passwordVariable: 'NEXUS_PASS'
+                )]) {
+                    sh """
+                        echo \$NEXUS_PASS | docker login ${NEXUS_URL} -u \$NEXUS_USER --password-stdin
+                        docker tag ${DOCKER_IMAGE}:latest ${NEXUS_URL}/${NEXUS_REPO}/zomato:latest
+                        docker push ${NEXUS_URL}/${NEXUS_REPO}/zomato:latest
+                        docker logout ${NEXUS_URL}
+                    """
+                }
+            }
+        }
+
+        stage('Push Docker Image to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: "${DOCKER_CRED_ID}",
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push mahesh2452/zomato-project:latest
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy with Docker Compose') {
+            steps {
+                sh '''
+                    docker compose down --remove-orphans || true
+                    docker compose up -d
+                '''
+            }
+        }
+
+        stage('Deploy Prometheus and Grafana') {
+            steps {
+                sh '''
+                    docker compose -f monitoring/docker-compose-monitoring.yml down --remove-orphans || true
+                    docker compose -f monitoring/docker-compose-monitoring.yml up -d
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: "${AWS_CRED_ID}",
+                    usernameVariable: 'AWS_ACCESS_KEY_ID',
+                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                )]) {
+                    sh """
+                        export AWS_ACCESS_KEY_ID=\$AWS_ACCESS_KEY_ID
+                        export AWS_SECRET_ACCESS_KEY=\$AWS_SECRET_ACCESS_KEY
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                        kubectl apply -f deployment.yml
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            emailext(
+                attachLog: true,
+                mimeType: 'text/html',
+                to: "${RECIPIENTS}",
+                subject: "'${currentBuild.result}' — ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <html>
+                    <body style="font-family: Arial, sans-serif;">
+                        <div style="background-color: #FFA07A; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: white; font-weight: bold;">Project: ${env.JOB_NAME}</p>
+                        </div>
+                        <div style="background-color: #90EE90; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: white; font-weight: bold;">Build Number: ${env.BUILD_NUMBER}</p>
+                        </div>
+                        <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
+                            <p style="color: white; font-weight: bold;">Status: ${currentBuild.result}</p>
+                        </div>
+                        <div style="background-color: #f5f5f5; padding: 10px;">
+                            <p><strong>Console Output:</strong> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                        </div>
+                    </body>
+                    </html>
+                """
+            )
+        }
+    }
+}
