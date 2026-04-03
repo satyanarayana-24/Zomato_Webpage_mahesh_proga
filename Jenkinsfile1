@@ -7,7 +7,7 @@ pipeline {
     }
 
     environment {
-        SONARQUBE_ENV  = 'sonar-server'
+        SONARQUBE_ENV  = 'sq'
         DOCKER_IMAGE   = 'mahesh2452/zomato-project'
         DOCKER_CRED_ID = 'dockerhub-cred'
         SONAR_CRED_ID  = 'sq'
