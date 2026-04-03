@@ -1,23 +1,11 @@
-# Use Node.js 16 slim as the base image
 FROM node:16-slim
 
-# Set the working directory
-WORKDIR /app
+# Remove default apps
+RUN rm -rf /usr/local/tomcat/webapps/*
 
-# Copy package.json and package-lock.json to the working director
-COPY package*.json ./
+# Copy WAR as ROOT.war
+COPY target/zomato-manufacturing.war /usr/local/tomcat/webapps/ROOT.war
 
-# Install dependencies
-RUN npm install
-
-# Copy the rest of the application code
-COPY . .
-
-# Build the React app
-RUN npm run build
-
-# Expose port 3000 (or the port your app is configured to listen on)
 EXPOSE 3000
 
-# Start your Node.js server (assuming it serves the React app)  
-CMD ["npm", "start"]
+CMD ["catalina.sh", "run"]
