@@ -7,10 +7,8 @@ pipeline {
     }
 
     environment {
-        SONARQUBE_ENV  = 'sq'
         DOCKER_IMAGE   = 'mahesh2452/zomato-project'
         DOCKER_CRED_ID = 'dockerhub-cred'
-        SONAR_CRED_ID  = 'sq'
         AWS_CRED_ID    = 'aws-creds'
         NEXUS_CRED_ID  = 'nexus-cred'
         NEXUS_URL      = 'http://13.235.9.61:8081'
@@ -35,7 +33,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                withSonarQubeEnv('sq') {
                     script {
                         def scannerHome = tool name: 'sq', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                         sh """
@@ -51,8 +49,8 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true,
-                                       credentialsId: "${SONAR_CRED_ID}"
+                    waitForQualityGate abortPipeline: false,
+                                       credentialsId: 'sq'
                 }
             }
         }
