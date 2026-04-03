@@ -1,108 +1,106 @@
 pipeline {
     agent any
-    tools {
-        jdk 'jdk21'
-        nodejs 'node23'
-    }
+
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SONARQUBE_ENV = 'sq'
+        DOCKER_IMAGE = "mahesh2452/zomato-project"
+        RECIPIENTS = 'maheshbabuya@gmail.com'
     }
+
     stages {
-        stage ("clean workspace") {
+
+        stage('Clone Repository') {
             steps {
-                cleanWs()
+                git branch: 'main', url: 'https://github.com/Mahesh1-code141/Zomato_Webpage.git'
             }
         }
-        stage ("Git Checkout") {
-            steps {
-                git 'https://github.com/Mahesh1-code141/Zomato_Webpage.git'
-            }
+        stage('BUILD') {
+        steps {
+            sh 'mvn clean package -DskipTests'
         }
-        stage("Sonarqube Analysis"){
-            steps{
-                withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=zomato \
-                    -Dsonar.projectKey=zomato '''
-                }
-            }
-        }
-        stage("Code Quality Gate"){
-           steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sq' 
-                }
-            } 
-        }
-        stage("Install NPM Dependencies") {
-            steps {
-                sh "npm install"
-            }
-        }
-        stage('OWASP FS SCAN') {
-            steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit -n', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
     }
+        stage('JENKINS TO NEXUS') {
+        steps {
+          withMaven(jdk: 'jdk21', maven: 'maven3', traceability: true) {
+             sh 'mvn deploy'
 }
-        stage ("Trivy File Scan") {
-            steps {
-                sh "trivy fs . > trivy.txt"
-            }
         }
-        stage ("Build Docker Image") {
+    }
+        stage('SonarQube Analysis') {
             steps {
-                sh "docker build -t zomato ."
-            }
-        }
-        stage ("Tag & Push to DockerHub") {
-            steps {
-                script {
-                    withDockerRegistry(credentialsId: 'dockerhub-cred') {
-                        sh "docker tag zomato mahesh2452/zomato:latest "
-                        sh "docker push mahesh2452/zomato:latest "
-                    }
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                    sh 'mvn sonar:sonar'
                 }
             }
         }
-        stage('Docker Scout Image') {
+
+        stage('Quality Gate') {
             steps {
-                script{
-                   withDockerRegistry(credentialsId: 'dockerhub-cred', toolName: 'docker'){
-                       sh 'docker-scout quickview mahesh2452/zomato:latest'
-                       sh 'docker-scout cves mahesh2452/zomato:latest'
-                       sh 'docker-scout recommendations  mahesh2452/zomato:latest'
-                   }
+                timeout(time: 1, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
-        stage ("Deploy to Container") {
+
+
+        stage('Build Docker Image') {
             steps {
-                sh 'docker run -d --name zomatocont -p 3000:3000 mahesh2452/zomato:latest'
+                sh 'docker build -t $DOCKER_IMAGE:latest .'
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh '''
+                    echo $PASS | docker login -u $USER --password-stdin
+                    docker push $DOCKER_IMAGE:latest
+                    docker logout
+                    '''
+                }
+            }
+        }
+         stage('Build') {
+            steps {
+                echo "Building..."
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo "Testing..."
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                sh '''
+                export AWS_ACCESS_KEY_ID=$AWS_CREDS_USR
+                export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
+
+                aws eks update-kubeconfig --region ap-south-1 --name mycluster
+                kubectl apply -f deployment.yml
+                '''
             }
         }
     }
+
     post {
-    always {
-        emailext attachLog: true,
-            subject: "'${currentBuild.result}'",
-            body: """
-                <html>
-                <body>
-                    <div style="background-color: #FFA07A; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">Project: ${env.JOB_NAME}</p>
-                    </div>
-                    <div style="background-color: #90EE90; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">Build Number: ${env.BUILD_NUMBER}</p>
-                    </div>
-                    <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">URL: ${env.BUILD_URL}</p>
-                    </div>
-                </body>
-                </html>
-            """,
-            to: 'maheshbabuya@gmail.com',
-            mimeType: 'text/html',
-            attachmentsPattern: 'trivy.txt'
+        success {
+            emailext(
+                subject: "Jenkins Job '${env.JOB_NAME}' Success",
+                body: "Good news! Job '${env.JOB_NAME}' (#${env.BUILD_NUMBER}) succeeded.\n\nCheck console output at ${env.BUILD_URL}",
+                to: "${RECIPIENTS}"
+            )
         }
+
+        failure {
+            emailext(
+                subject: "Jenkins Job '${env.JOB_NAME}' Failed",
+                body: "Alert! Job '${env.JOB_NAME}' (#${env.BUILD_NUMBER}) failed.\n\nCheck console output at ${env.BUILD_URL}",
+                to: "${RECIPIENTS}"
+            )
+        }
+
     }
 }
