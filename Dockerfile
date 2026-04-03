@@ -1,10 +1,10 @@
 FROM node:16-slim
 
 # Remove default apps
-RUN rm -rf /usr/local/tomcat/webapps/*
+RUN rm -rf /usr/local/node/webapps/*
 
 # Copy WAR as ROOT.war
-COPY target/zomato-manufacturing.war /usr/local/tomcat/webapps/ROOT.war
+COPY target/zomato-manufacturing.war /usr/local/node/webapps/ROOT.war
 
 EXPOSE 3000
 
