@@ -37,7 +37,7 @@ pipeline {
             steps {
                 withSonarQubeEnv("${SONARQUBE_ENV}") {
                     script {
-                        def scannerHome = tool name: 'sonar-scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+                        def scannerHome = tool name: 'sq', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
                         sh """
                             ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectName=zomato \
