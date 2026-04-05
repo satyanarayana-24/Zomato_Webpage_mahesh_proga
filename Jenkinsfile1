@@ -54,8 +54,6 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 2, unit: 'MINUTES') {
-                    // ✅ abortPipeline: true - stops if quality fails
-                    // ✅ removed credentialsId - not needed here
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -81,15 +79,12 @@ pipeline {
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
                     sh """
-                        // ✅ Login uses NEXUS_URL (with http://)
                         echo \$NEXUS_PASS | docker login ${NEXUS_URL} \
                         -u \$NEXUS_USER --password-stdin
 
-                        // ✅ Tag uses NEXUS_REGISTRY (without http://)
                         docker tag ${DOCKER_IMAGE}:latest \
                         ${NEXUS_REGISTRY}/${NEXUS_REPO}/zomato:latest
 
-                        // ✅ Push uses NEXUS_REGISTRY (without http://)
                         docker push \
                         ${NEXUS_REGISTRY}/${NEXUS_REPO}/zomato:latest
 
