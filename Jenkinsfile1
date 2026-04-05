@@ -31,20 +31,21 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('sq') {
-                    script {
-                        def scannerHome = tool name: 'sq', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectName=zomato \
-                                -Dsonar.projectKey=zomato
-                        """
-                    }
-                }
+stage('SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('sq') {
+            withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                sh '''
+                /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/sq/bin/sonar-scanner \
+                -Dsonar.projectName=zomato \
+                -Dsonar.projectKey=zomato \
+                -Dsonar.host.url=$SONAR_HOST_URL \
+                -Dsonar.token=$SONAR_TOKEN
+                '''
             }
         }
+    }
+}
 
         stage('Quality Gate') {
             steps {
