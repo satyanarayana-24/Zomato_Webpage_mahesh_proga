@@ -11,7 +11,8 @@ pipeline {
         DOCKER_CRED_ID = 'dockerhub-cred'
         AWS_CRED_ID    = 'aws-creds'
         NEXUS_CRED_ID  = 'nexus-cred'
-        NEXUS_URL      = 'http://13.235.9.61:8082'
+        NEXUS_URL      = 'http://13.235.9.61:8082'    // ← for login
+        NEXUS_REGISTRY = '13.235.9.61:8082'            // ← for tag/push
         NEXUS_REPO     = 'zomato-docker'
         EKS_CLUSTER    = 'mycluster'
         AWS_REGION     = 'ap-south-1'
@@ -31,27 +32,31 @@ pipeline {
             }
         }
 
-stage('SonarQube Analysis') {
-    steps {
-        withSonarQubeEnv('sq') {
-            withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                sh '''
-                /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/sq/bin/sonar-scanner \
-                -Dsonar.projectName=zomato \
-                -Dsonar.projectKey=zomato \
-                -Dsonar.host.url=$SONAR_HOST_URL \
-                -Dsonar.token=$SONAR_TOKEN
-                '''
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sq') {
+                    withCredentials([string(
+                        credentialsId: 'sonar-token', 
+                        variable: 'SONAR_TOKEN'
+                    )]) {
+                        sh '''
+                        /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/sq/bin/sonar-scanner \
+                        -Dsonar.projectName=zomato \
+                        -Dsonar.projectKey=zomato \
+                        -Dsonar.host.url=$SONAR_HOST_URL \
+                        -Dsonar.token=$SONAR_TOKEN
+                        '''
+                    }
+                }
             }
         }
-    }
-}
 
         stage('Quality Gate') {
             steps {
                 timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false,
-                                       credentialsId: 'sonar-token'
+                    // ✅ abortPipeline: true - stops if quality fails
+                    // ✅ removed credentialsId - not needed here
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
@@ -76,9 +81,18 @@ stage('SonarQube Analysis') {
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
                     sh """
-                        echo \$NEXUS_PASS | docker login ${NEXUS_URL} -u \$NEXUS_USER --password-stdin
-                        docker tag ${DOCKER_IMAGE}:latest 13.235.9.61:8082/${NEXUS_REPO}/zomato:latest
-                        docker push ${NEXUS_URL}/${NEXUS_REPO}/zomato:latest
+                        // ✅ Login uses NEXUS_URL (with http://)
+                        echo \$NEXUS_PASS | docker login ${NEXUS_URL} \
+                        -u \$NEXUS_USER --password-stdin
+
+                        // ✅ Tag uses NEXUS_REGISTRY (without http://)
+                        docker tag ${DOCKER_IMAGE}:latest \
+                        ${NEXUS_REGISTRY}/${NEXUS_REPO}/zomato:latest
+
+                        // ✅ Push uses NEXUS_REGISTRY (without http://)
+                        docker push \
+                        ${NEXUS_REGISTRY}/${NEXUS_REPO}/zomato:latest
+
                         docker logout ${NEXUS_URL}
                     """
                 }
@@ -93,7 +107,8 @@ stage('SonarQube Analysis') {
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh '''
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        echo $DOCKER_PASS | docker login \
+                        -u $DOCKER_USER --password-stdin
                         docker push mahesh2452/zomato-project:latest
                         docker logout
                     '''
@@ -113,8 +128,11 @@ stage('SonarQube Analysis') {
         stage('Deploy Prometheus and Grafana') {
             steps {
                 sh '''
-                    docker compose -f monitoring/docker-compose-monitoring.yml down --remove-orphans || true
-                    docker compose -f monitoring/docker-compose-monitoring.yml up -d
+                    docker compose -f monitoring/docker-compose-monitoring.yml \
+                    down --remove-orphans || true
+                    
+                    docker compose -f monitoring/docker-compose-monitoring.yml \
+                    up -d
                 '''
             }
         }
@@ -127,10 +145,12 @@ stage('SonarQube Analysis') {
                     usernameVariable: 'ANSIBLE_USER'
                 )]) {
                     sh '''
-                        ansible-playbook -i ansible/inventory.ini ansible/playbook.yml \
-                            --private-key=$SSH_KEY \
-                            -u $ANSIBLE_USER \
-                            --extra-vars "docker_image=mahesh2452/zomato-project:latest"
+                        ansible-playbook \
+                        -i ansible/inventory.ini \
+                        ansible/playbook.yml \
+                        --private-key=$SSH_KEY \
+                        -u $ANSIBLE_USER \
+                        --extra-vars "docker_image=mahesh2452/zomato-project:latest"
                     '''
                 }
             }
@@ -138,15 +158,19 @@ stage('SonarQube Analysis') {
 
         stage('Deploy to EKS') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: "${AWS_CRED_ID}",
-                    usernameVariable: 'AWS_ACCESS_KEY_ID',
-                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                )]) {
+                // ✅ Using string credentials for AWS
+                withCredentials([
+                    string(credentialsId: 'aws-access-key',
+                           variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-key',
+                           variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
                     sh """
                         export AWS_ACCESS_KEY_ID=\$AWS_ACCESS_KEY_ID
                         export AWS_SECRET_ACCESS_KEY=\$AWS_SECRET_ACCESS_KEY
-                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                        aws eks update-kubeconfig \
+                        --region ${AWS_REGION} \
+                        --name ${EKS_CLUSTER}
                         kubectl apply -f deployment.yml
                     """
                 }
