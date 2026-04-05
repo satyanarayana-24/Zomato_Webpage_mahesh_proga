@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  zomato:
+    image: mahesh2452/zomato-project:latest
+    container_name: zomato-app
+    ports:
+      - "3000:3000"
+    restart: always
