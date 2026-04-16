@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        nodejs 'node'  // keep your existing nodejs tool
-    }
-
     environment {
         SONAR_TOKEN = credentials('sonar-token')  // your Jenkins credential ID
     }
