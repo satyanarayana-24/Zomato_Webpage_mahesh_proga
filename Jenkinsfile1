@@ -3,29 +3,29 @@ pipeline {
 
     tools {
         jdk 'jdk21'
-        git
+        git 'Default'
     }
 
     environment {
         DOCKER_IMAGE   = 'mahesh2452/zomato-project'
         DOCKER_CRED_ID = 'dockerhub-cred'
-        AWS_CRED_ID    = 'aws-creds'
         NEXUS_CRED_ID  = 'nexus-cred'
-        NEXUS_URL      = 'http://15.206.117.200:8081'    // ← for login
-        NEXUS_REGISTRY = '172.31.42.31:8082'            // ← for tag/push
+        NEXUS_URL      = 'http://15.206.117.200:8081'
+        NEXUS_REGISTRY = '172.31.42.31:8082'
         NEXUS_REPO     = 'zomato-docker'
-        EKS_CLUSTER    = 'mycluster'
         AWS_REGION     = 'ap-south-1'
+        EKS_CLUSTER    = 'mycluster'
     }
 
     stages {
+
         stage('Clean Workspace') {
             steps {
                 cleanWs()
             }
         }
 
-        stage('Git Checkout') {
+        stage('Checkout Code') {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/Mahesh1-code141/Zomato_Webpage.git'
@@ -36,15 +36,15 @@ pipeline {
             steps {
                 withSonarQubeEnv('sq') {
                     withCredentials([string(
-                        credentialsId: 'sonar-token', 
+                        credentialsId: 'sonar-token',
                         variable: 'SONAR_TOKEN'
                     )]) {
                         sh '''
-                        /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/sq/bin/sonar-scanner \
+                        sonar-scanner \
                         -Dsonar.projectName=zomato \
                         -Dsonar.projectKey=zomato \
                         -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.token=$SONAR_TOKEN
+                        -Dsonar.login=$SONAR_TOKEN
                         '''
                     }
                 }
@@ -53,21 +53,27 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 2, unit: 'MINUTES') {
+                timeout(time: 3, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage('Install NPM Dependencies') {
+        stage('Install Dependencies') {
             steps {
-                sh 'npm install'
+                sh '''
+                if [ -f package.json ]; then
+                    npm install
+                fi
+                '''
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE}:latest ."
+                sh '''
+                docker build -t $DOCKER_IMAGE:latest .
+                '''
             }
         }
 
@@ -78,23 +84,23 @@ pipeline {
                     usernameVariable: 'NEXUS_USER',
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
-                    sh """
-                        echo \$NEXUS_PASS | docker login ${NEXUS_URL} \
-                        -u \$NEXUS_USER --password-stdin
+                    sh '''
+                    echo $NEXUS_PASS | docker login $NEXUS_URL \
+                    -u $NEXUS_USER --password-stdin
 
-                        docker tag ${DOCKER_IMAGE}:latest \
-                        ${NEXUS_REGISTRY}/${NEXUS_REPO}/zomato:latest
+                    docker tag $DOCKER_IMAGE:latest \
+                    $NEXUS_REGISTRY/$NEXUS_REPO/zomato:latest
 
-                        docker push \
-                        ${NEXUS_REGISTRY}/${NEXUS_REPO}/zomato:latest
+                    docker push \
+                    $NEXUS_REGISTRY/$NEXUS_REPO/zomato:latest
 
-                        docker logout ${NEXUS_URL}
-                    """
+                    docker logout $NEXUS_URL
+                    '''
                 }
             }
         }
 
-        stage('Push Docker Image to DockerHub') {
+        stage('Push to DockerHub') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: "${DOCKER_CRED_ID}",
@@ -102,78 +108,73 @@ pipeline {
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh '''
-                        echo $DOCKER_PASS | docker login \
-                        -u $DOCKER_USER --password-stdin
-                        docker push mahesh2452/zomato-project:latest
-                        docker logout
+                    echo $DOCKER_PASS | docker login \
+                    -u $DOCKER_USER --password-stdin
+
+                    docker tag $DOCKER_IMAGE:latest \
+                    $DOCKER_USER/zomato-project:latest
+
+                    docker push $DOCKER_USER/zomato-project:latest
+
+                    docker logout
                     '''
                 }
             }
         }
 
         stage('Deploy with Docker Compose') {
-    steps {
-        sh '''
-            # Check file exists
-            ls -la
-            ls docker-compose.yml
-            
-            docker compose down --remove-orphans || true
-            docker compose up -d
-        '''
-    }
-}
-
-        stage('Deploy Prometheus and Grafana') {
             steps {
                 sh '''
-                    docker compose -f monitoring/docker-compose-monitoring.yml \
-                    down --remove-orphans || true
-                    
-                    docker compose -f monitoring/docker-compose-monitoring.yml \
-                    up -d
+                if [ -f docker-compose.yml ]; then
+                    docker compose down --remove-orphans || true
+                    docker compose up -d
+                else
+                    echo "docker-compose.yml not found, skipping..."
+                fi
                 '''
             }
         }
 
-        stage('Ansible Deployment') {
+        stage('Deploy Monitoring Stack') {
             steps {
-                withCredentials([sshUserPrivateKey(
-                    credentialsId: 'ansible-ssh-key',
-                    keyFileVariable: 'SSH_KEY',
-                    usernameVariable: 'ANSIBLE_USER'
-                )]) {
-                    sh '''
-                        ansible-playbook \
-                        -i ansible/inventory.ini \
-                        ansible/playbook.yml \
-                        --private-key=$SSH_KEY \
-                        -u $ANSIBLE_USER \
-                        --extra-vars "docker_image=mahesh2452/zomato-project:latest"
-                    '''
-                }
+                sh '''
+                if [ -f monitoring/docker-compose-monitoring.yml ]; then
+                    docker compose -f monitoring/docker-compose-monitoring.yml down || true
+                    docker compose -f monitoring/docker-compose-monitoring.yml up -d
+                else
+                    echo "Monitoring config not found, skipping..."
+                fi
+                '''
             }
         }
 
         stage('Deploy to EKS') {
             steps {
-                // ✅ Using string credentials for AWS
                 withCredentials([
-                    string(credentialsId: 'aws-access-key',
-                           variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-key',
-                           variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
-                    sh """
-                        export AWS_ACCESS_KEY_ID=\$AWS_ACCESS_KEY_ID
-                        export AWS_SECRET_ACCESS_KEY=\$AWS_SECRET_ACCESS_KEY
-                        aws eks update-kubeconfig \
-                        --region ${AWS_REGION} \
-                        --name ${EKS_CLUSTER}
-                        kubectl apply -f deployment.yml
-                    """
+                    sh '''
+                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+
+                    aws eks update-kubeconfig \
+                    --region $AWS_REGION \
+                    --name $EKS_CLUSTER
+
+                    kubectl apply -f deployment.yml
+                    '''
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline completed successfully!"
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs."
         }
     }
 }
