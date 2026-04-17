@@ -10,7 +10,7 @@ pipeline {
         DOCKER_CRED_ID = 'dockerhub-cred'
         AWS_CRED_ID    = 'aws-creds'
         NEXUS_CRED_ID  = 'nexus-cred'
-        NEXUS_URL      = 'http://172.31.42.31:8082'    // ← for login
+        NEXUS_URL      = 'http://15.206.117.200:8081'    // ← for login
         NEXUS_REGISTRY = '172.31.42.31:8082'            // ← for tag/push
         NEXUS_REPO     = 'zomato-docker'
         EKS_CLUSTER    = 'mycluster'
@@ -33,13 +33,13 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') {
+                withSonarQubeEnv('sq') {
                     withCredentials([string(
                         credentialsId: 'sonar-token', 
                         variable: 'SONAR_TOKEN'
                     )]) {
                         sh '''
-                        /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/sonarqube/bin/sonar-scanner \
+                        /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/sq/bin/sonar-scanner \
                         -Dsonar.projectName=zomato \
                         -Dsonar.projectKey=zomato \
                         -Dsonar.host.url=$SONAR_HOST_URL \
