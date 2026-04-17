@@ -40,7 +40,7 @@ pipeline {
                         variable: 'SONAR_TOKEN'
                     )]) {
                         sh '''
-                        sonar-scanner \
+                        $SONAR_RUNNER_HOME/bin/sonar-scanner \
                         -Dsonar.projectName=zomato \
                         -Dsonar.projectKey=zomato \
                         -Dsonar.host.url=$SONAR_HOST_URL \
