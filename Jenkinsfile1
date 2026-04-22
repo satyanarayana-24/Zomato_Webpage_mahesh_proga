@@ -8,8 +8,8 @@ pipeline {
 
     environment {
         SONARQUBE_ENV = 'sq'
-        DOCKER_IMAGE = "rajeshtutta123/zomato"
-        AWS_DEFAULT_REGION = 'us-east-1'
+        DOCKER_IMAGE = "mahesh2452/zomato"
+        AWS_DEFAULT_REGION = 'eu-north-1'
         RECIPIENTS = 'rajeshtutta123@gmail.com'
     }
 
@@ -17,7 +17,7 @@ pipeline {
 
         stage('Clone Repository') {
             steps {
-                git branch: 'main', url: 'https://github.com/rajeshtutta/zomato.git'
+                git branch: 'main', url: 'https://github.com/satyanarayana-24/Zomato_Webpage_mahesh_proga.git'
             }
         }
 
