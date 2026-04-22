@@ -2,8 +2,9 @@ pipeline {
     agent any
 
     tools {
-        maven 'maven3'
+       
         jdk 'jdk21'
+        sonarQubeScanner 'sonar-scanner'
     }
 
     environment {
@@ -33,17 +34,24 @@ pipeline {
             }
         }
 
+
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv("${SONARQUBE_ENV}") {
-                    sh 'mvn sonar:sonar'
+                    sh '''
+                    sonar-scanner \
+                      -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+                      -Dsonar.sources=. \
+                      -Dsonar.host.url=$SONAR_HOST_URL \
+                      -Dsonar.login=$SONAR_AUTH_TOKEN
+                    '''
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 1, unit: 'MINUTES') {
+                timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -58,6 +66,7 @@ pipeline {
                 '''
             }
         }
+
 
         stage('Build Docker Image') {
             steps {
