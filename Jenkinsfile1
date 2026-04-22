@@ -10,8 +10,8 @@ pipeline {
         DOCKER_IMAGE   = 'mahesh2452/zomato-project'
         DOCKER_CRED_ID = 'dockerhub-cred'
         NEXUS_CRED_ID  = 'nexus-cred'
-        NEXUS_URL      = 'http://15.206.117.200:8081'
-        NEXUS_REGISTRY = '172.31.42.31:8082'
+        NEXUS_URL      = 'http://13.60.63.115:8081'
+       // NEXUS_REGISTRY = '172.31.42.31:8082'
         NEXUS_REPO     = 'zomato-docker'
         AWS_REGION     = 'ap-south-1'
         EKS_CLUSTER    = 'mycluster'
@@ -28,7 +28,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Mahesh1-code141/Zomato_Webpage.git'
+                    url: 'https://github.com/satyanarayana-24/Zomato_Webpage_mahesh_proga.git'
             }
         }
 
