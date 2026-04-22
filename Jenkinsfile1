@@ -45,7 +45,10 @@ pipeline {
                 sh """
                 ${scannerHome}/bin/sonar-scanner \
                   -Dsonar.projectKey=zomato-project \
+                  -Dsonar.projectName=ZomatoProject \
                   -Dsonar.sources=. \
+                  -Dsonar.language=web \
+                  -Dsonar.sourceEncoding=UTF-8 \
                   -Dsonar.host.url=$SONAR_HOST_URL \
                   -Dsonar.login=$SONAR_AUTH_TOKEN
                 """
