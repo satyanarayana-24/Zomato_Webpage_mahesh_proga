@@ -3,8 +3,6 @@ pipeline {
 
     tools {
         jdk 'jdk21'
-        'hudson.plugins.sonar.SonarRunnerInstallation' 'sq'
-       
     }
 
     environment {
@@ -12,7 +10,7 @@ pipeline {
         DOCKER_CRED_ID = 'dockerhub-cred'
         NEXUS_CRED_ID  = 'nexus-cred'
         NEXUS_URL      = 'http://13.60.63.115:8081'
-       // NEXUS_REGISTRY = '172.31.42.31:8082'
+        NEXUS_REGISTRY = '172.31.42.31:8082'   // ✅ FIXED
         NEXUS_REPO     = 'zomato-docker'
         AWS_REGION     = 'ap-south-1'
         EKS_CLUSTER    = 'mycluster'
@@ -29,11 +27,11 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/satyanarayana-24/Zomato_Webpage_mahesh_proga.git'
+                url: 'https://github.com/satyanarayana-24/Zomato_Webpage_mahesh_proga.git'
             }
         }
 
-               stage('SonarQube Analysis') {
+        stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sq') {
                     withCredentials([string(
@@ -41,7 +39,7 @@ pipeline {
                         variable: 'SONAR_TOKEN'
                     )]) {
                         sh '''
-                        sonar-scanner \
+                        /opt/sonar-scanner/bin/sonar-scanner \
                         -Dsonar.projectName=zomato \
                         -Dsonar.projectKey=zomato \
                         -Dsonar.host.url=$SONAR_HOST_URL \
@@ -72,9 +70,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                docker build -t $DOCKER_IMAGE:latest .
-                '''
+                sh 'docker build -t $DOCKER_IMAGE:latest .'
             }
         }
 
@@ -86,8 +82,7 @@ pipeline {
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
                     sh '''
-                    echo $NEXUS_PASS | docker login $NEXUS_URL \
-                    -u $NEXUS_USER --password-stdin
+                    echo $NEXUS_PASS | docker login $NEXUS_URL -u $NEXUS_USER --password-stdin
 
                     docker tag $DOCKER_IMAGE:latest \
                     $NEXUS_REGISTRY/$NEXUS_REPO/zomato:latest
@@ -109,8 +104,7 @@ pipeline {
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh '''
-                    echo $DOCKER_PASS | docker login \
-                    -u $DOCKER_USER --password-stdin
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
 
                     docker tag $DOCKER_IMAGE:latest \
                     $DOCKER_USER/zomato-project:latest
@@ -129,8 +123,6 @@ pipeline {
                 if [ -f docker-compose.yml ]; then
                     docker compose down --remove-orphans || true
                     docker compose up -d
-                else
-                    echo "docker-compose.yml not found, skipping..."
                 fi
                 '''
             }
@@ -142,8 +134,6 @@ pipeline {
                 if [ -f monitoring/docker-compose-monitoring.yml ]; then
                     docker compose -f monitoring/docker-compose-monitoring.yml down || true
                     docker compose -f monitoring/docker-compose-monitoring.yml up -d
-                else
-                    echo "Monitoring config not found, skipping..."
                 fi
                 '''
             }
@@ -156,9 +146,6 @@ pipeline {
                     string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     sh '''
-                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-
                     aws eks update-kubeconfig \
                     --region $AWS_REGION \
                     --name $EKS_CLUSTER
