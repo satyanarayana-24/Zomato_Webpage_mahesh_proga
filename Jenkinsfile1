@@ -2,10 +2,12 @@ pipeline {
     agent any
 
     tools {
+        maven 'maven3'
         jdk 'jdk21'
     }
 
     environment {
+        SONARQUBE_ENV = 'sq'
         DOCKER_IMAGE   = 'mahesh2452/zomato-project'
         DOCKER_CRED_ID = 'dockerhub-cred'
         NEXUS_CRED_ID  = 'nexus-cred'
@@ -33,26 +35,15 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sq') {
-                    withCredentials([string(
-                        credentialsId: 'sonar-token',
-                        variable: 'SONAR_TOKEN'
-                    )]) {
-                        sh '''
-                        /opt/sonar-scanner/bin/sonar-scanner \
-                        -Dsonar.projectName=zomato \
-                        -Dsonar.projectKey=zomato \
-                        -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.login=$SONAR_TOKEN
-                        '''
-                    }
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
+                    sh 'mvn sonar:sonar'
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 3, unit: 'MINUTES') {
+                timeout(time: 1, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
