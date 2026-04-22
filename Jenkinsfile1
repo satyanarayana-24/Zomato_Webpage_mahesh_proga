@@ -3,8 +3,8 @@ pipeline {
 
     tools {
         jdk 'jdk21'
-      //  'hudson.plugins.sonar.SonarRunnerInstallation' 'sq'
-        sonarQubeScanner 'sq-scanner'
+        'hudson.plugins.sonar.SonarRunnerInstallation' 'sq'
+       
     }
 
     environment {
