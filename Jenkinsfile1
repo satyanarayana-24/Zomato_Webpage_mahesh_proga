@@ -8,7 +8,7 @@ pipeline {
 
     environment {
         SONARQUBE_ENV = 'sq'
-        DOCKER_IMAGE = "mahesh2452/zomato"
+        DOCKER_IMAGE = "mahesh2452/zomato-project"
         AWS_DEFAULT_REGION = 'eu-north-1'
         RECIPIENTS = 'rajeshtutta123@gmail.com'
     }
